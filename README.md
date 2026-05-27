@@ -23,6 +23,18 @@ It does **not** contain production dashboards, real alert thresholds tuned to a 
 
 ---
 
+## Companion showcases / 配套橱窗
+
+This is one corner of a three-repo showcase triangle covering my main practice areas:
+
+- [**cuckoo-echo-showcase**](https://github.com/pingxin403/cuckoo-echo-showcase) — multi-tenant AI customer-service SaaS architecture
+- [**cicd-platform-showcase**](https://github.com/pingxin403/cicd-platform-showcase) — CI/CD & release governance (this showcase's SLO definitions feed cicd-platform-showcase's canary gating in ADR-0004)
+- **You are here** — observability platform (this repo)
+
+All three are docs-only and intentionally cross-reference where decisions span domains.
+
+---
+
 ## Project context / 项目背景
 
 This showcase aggregates practices from:
