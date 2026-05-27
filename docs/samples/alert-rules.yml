@@ -1,0 +1,158 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# alert-rules.yml — sanitized Prometheus alert rules
+#
+# Demonstrates the three-tier alerting model from ADR-0003:
+#   - Tier 1 (severity: critical) — paging, customer-visible symptoms
+#   - Tier 2 (severity: warning)  — Slack-only, root-cause indicators
+#   - Tier 3 (severity: info)     — capacity / saturation, ticketed
+#
+# All thresholds (5%, 5s, 80%, etc.) are INDICATIVE. Real systems need
+# thresholds tuned to that system's traffic + SLO.
+# ─────────────────────────────────────────────────────────────────────────────
+
+groups:
+
+  # ═══ Tier 1: Symptoms (pageable) ═════════════════════════════════════════
+  - name: symptoms-api
+    rules:
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_requests_total[5m])) by (job)
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          tier: api
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          runbook: "https://internal-runbook-host/high-error-rate"
+
+      # Multi-window burn-rate (preferred over fixed threshold for SLO-bound services)
+      # See https://sre.google/workbook/alerting-on-slos/ for derivation.
+      - alert: ErrorBudgetBurn_Fast
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > (14.4 * 0.001)  # 14.4x burn against 99.9% SLO
+          and
+          (
+            sum(rate(http_requests_total{status=~"5.."}[1h])) by (service)
+            /
+            sum(rate(http_requests_total[1h])) by (service)
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          tier: api
+        annotations:
+          summary: "Fast error-budget burn on {{ $labels.service }}"
+          description: "At current rate, monthly budget exhausted in < 2 days"
+          runbook: "https://internal-runbook-host/error-budget-burn"
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          tier: api
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          runbook: "https://internal-runbook-host/service-down"
+
+  # ═══ Tier 2: Causes (warning, office-hours) ═══════════════════════════════
+  - name: causes-data-tier
+    rules:
+
+      - alert: PgPoolSaturated
+        expr: pg_pool_in_use_connections / pg_pool_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          tier: data
+        annotations:
+          summary: "Postgres pool {{ $value | humanizePercentage }} saturated on {{ $labels.service }}"
+          description: "Sustained > 80%; likely cause of upcoming latency spike"
+          runbook: "https://internal-runbook-host/pg-pool-saturation"
+
+      - alert: KafkaConsumerLag
+        expr: kafka_consumergroup_lag > 10000
+        for: 10m
+        labels:
+          severity: warning
+          tier: queue
+        annotations:
+          summary: "Kafka lag growing on {{ $labels.consumergroup }}/{{ $labels.topic }}"
+          description: "Lag = {{ $value }}; consumer not keeping up"
+
+      - alert: RedisCacheHitRateDropping
+        expr: |
+          (
+            rate(redis_keyspace_hits_total[10m])
+            /
+            (rate(redis_keyspace_hits_total[10m]) + rate(redis_keyspace_misses_total[10m]))
+          ) < 0.7
+        for: 15m
+        labels:
+          severity: warning
+          tier: cache
+        annotations:
+          summary: "Cache hit-rate dropped to {{ $value | humanizePercentage }}"
+          description: "Investigate: cache stampede / TTL misconfiguration / cold start"
+
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: warning
+          tier: integration
+        annotations:
+          summary: "Circuit breaker open: {{ $labels.service }} → {{ $labels.dependency }}"
+          description: "Downstream {{ $labels.dependency }} is failing"
+
+  # ═══ Tier 3: Saturation / capacity (informational, weekly review) ════════
+  - name: saturation-capacity
+    rules:
+
+      - alert: PodCpuApproachingLimit
+        expr: |
+          rate(container_cpu_usage_seconds_total[1h])
+          /
+          on(pod) container_spec_cpu_quota / container_spec_cpu_period
+          > 0.6
+        for: 6h
+        labels:
+          severity: info
+          tier: capacity
+        annotations:
+          summary: "{{ $labels.pod }} averaging > 60% CPU over last 6h"
+          description: "Capacity-plan: bump request/limit, scale out, or investigate code"
+
+      - alert: DiskUsageGrowingFast
+        expr: |
+          predict_linear(node_filesystem_free_bytes[7d], 14*24*3600)
+          < 0
+        for: 1h
+        labels:
+          severity: info
+          tier: capacity
+        annotations:
+          summary: "Disk on {{ $labels.instance }} predicted full within 14 days at current growth"
+          description: "Plan capacity: rotate, expand, or investigate growth source"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A few production-hardening rules to add per real deployment (not shown here):
+#
+#   - Per-tenant variants for multi-tenant services (alert when ONE tenant
+#     experiences errors above threshold, not just global).
+#   - "Metric absent" alerts for crucial counters — silent metric drop is a
+#     known failure mode after refactors.
+#   - Synthetic-transaction alerts (probe service from outside cluster).
+#
+# These are intentionally omitted from this sanitized sample.
+# ─────────────────────────────────────────────────────────────────────────────
