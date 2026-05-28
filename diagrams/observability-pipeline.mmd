@@ -1,0 +1,50 @@
+%%{init: {'theme':'neutral', 'themeVariables': {'fontFamily':'-apple-system, BlinkMacSystemFont, sans-serif'}}}%%
+graph LR
+    subgraph Services["Services / 服务"]
+        APP1["service A<br/>OTel SDK"]
+        APP2["service B<br/>OTel SDK"]
+        APP3["service C<br/>OTel SDK"]
+    end
+
+    subgraph Collector["OTel Collector"]
+        REC["receivers<br/>OTLP grpc/http"]
+        PROC["processors<br/>tail-sampling<br/>+ attribute scrub"]
+        EXP["exporters<br/>(routed by signal)"]
+    end
+
+    subgraph Storage["Storage / Backends"]
+        PROM[("Prometheus<br/>metrics 100%")]
+        TEMPO[("Tempo / Jaeger<br/>traces (sampled)")]
+        LOKI[("Loki / ELK<br/>structured JSON logs")]
+    end
+
+    subgraph Layer["Alerting tiers / 告警分层"]
+        T1["Tier 1: symptoms<br/>(pageable)<br/>burn-rate, P95, ServiceDown"]
+        T2["Tier 2: causes<br/>(Slack, office hours)<br/>pool-saturation, lag, CB-open"]
+        T3["Tier 3: capacity<br/>(weekly ticket)<br/>predict_linear disk/cpu"]
+    end
+
+    APP1 --> REC
+    APP2 --> REC
+    APP3 --> REC
+    REC --> PROC
+    PROC --> EXP
+    EXP --> PROM
+    EXP --> TEMPO
+    EXP --> LOKI
+    PROM --> T1
+    PROM --> T2
+    PROM --> T3
+
+    classDef svc fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
+    classDef col fill:#fff3e0,stroke:#f57c00,color:#e65100
+    classDef store fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+    classDef t1 fill:#ffcdd2,stroke:#c62828,color:#b71c1c
+    classDef t2 fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    classDef t3 fill:#dcedc8,stroke:#558b2f,color:#33691e
+    class APP1,APP2,APP3 svc
+    class REC,PROC,EXP col
+    class PROM,TEMPO,LOKI store
+    class T1 t1
+    class T2 t2
+    class T3 t3
