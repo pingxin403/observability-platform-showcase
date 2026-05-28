@@ -23,6 +23,16 @@ It does **not** contain production dashboards, real alert thresholds tuned to a 
 
 ---
 
+## At a glance / 一图概览
+
+![Observability pipeline + 3-tier alerting](diagrams/observability-pipeline.png)
+
+OTel SDKs in services → OTel Collector (tail-sampling + attribute scrub) → Prometheus / Tempo / Loki backends → three-tier alerting (symptoms / causes / capacity). Each segment is detailed in the ADRs below.
+
+> Source / re-render: [`diagrams/observability-pipeline.mmd`](diagrams/observability-pipeline.mmd) — see [`diagrams/README.md`](diagrams/README.md).
+
+---
+
 ## Companion showcases / 配套橱窗
 
 This is one corner of a three-repo showcase triangle covering my main practice areas:

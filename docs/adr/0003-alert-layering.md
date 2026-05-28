@@ -3,6 +3,10 @@
 - **Status**: Accepted
 - **Context**: alerting strategy across services
 
+![Observability pipeline showing the three alerting tiers: symptoms (pageable) / causes (Slack) / capacity (weekly)](../../diagrams/observability-pipeline.png)
+
+This ADR governs the right-hand portion of the diagram above (the three-tier alerting block).
+
 ## Context
 
 Two common alerting failure modes:
